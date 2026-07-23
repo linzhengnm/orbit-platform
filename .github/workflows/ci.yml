@@ -23,14 +23,14 @@ jobs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       
-    - name: Build
-      run: pnpm build
+    - name: Build all projects
+      run: npx nx run-many --target=build --all --parallel
       
-    - name: Test
-      run: pnpm test
+    - name: Test all projects
+      run: npx nx run-many --target=test --all --parallel
       
-    - name: Lint
-      run: pnpm lint
+    - name: Lint all projects
+      run: npx nx run-many --target=lint --all --parallel
       
     - name: Upload coverage reports
       uses: codecov/codecov-action@v4
