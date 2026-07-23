@@ -10,12 +10,6 @@
       "path": "./apps/web-app"
     },
     {
-      "path": "./libs/shared/ui"
-    },
-    {
-      "path": "./libs/shared/utils"
-    },
-    {
       "path": "./apps/api"
     }
   ],
