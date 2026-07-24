@@ -1,4 +1,4 @@
-import { sharedUtils } from './shared/utils.js';
+import { sharedUtils } from './utils';
 
 describe('sharedUtils', () => {
   it('should work', () => {
