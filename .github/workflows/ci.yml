@@ -29,9 +29,6 @@ jobs:
       env:
         NODE_OPTIONS: --max-old-space-size=4096
       
-    - name: Sync workspace
-      run: npx nx sync
-      
     - name: Build all projects
       run: npx nx run-many --target=build --all --parallel
       
