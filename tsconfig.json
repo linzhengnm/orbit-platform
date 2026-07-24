@@ -11,6 +11,12 @@
     },
     {
       "path": "./apps/api"
+    },
+    {
+      "path": "./libs/utils"
+    },
+    {
+      "path": "./libs/ui"
     }
   ],
   "compilerOptions": {}
