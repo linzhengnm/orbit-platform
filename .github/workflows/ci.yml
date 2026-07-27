@@ -76,7 +76,7 @@ jobs:
       uses: peaceiris/actions-gh-pages@v4
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./dist/apps/web-app
+        publish_dir: ./dist
         # Use the correct branch name for GitHub Pages
         # This ensures we're deploying to the right branch (gh-pages)
         destination_dir: .
