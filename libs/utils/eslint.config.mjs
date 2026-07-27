@@ -1,4 +1,6 @@
-import baseConfig from "../../../eslint.config.mjs";
+// Import the root ESLint configuration. The utils library is two levels deep
+// under the workspace root, so we need to go up two directories.
+import baseConfig from "../../eslint.config.mjs";
 
 export default [
     ...baseConfig,

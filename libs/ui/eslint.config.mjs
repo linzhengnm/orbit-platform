@@ -1,5 +1,7 @@
 import nx from "@nx/eslint-plugin";
-import baseConfig from "../../../eslint.config.mjs";
+// Import the root ESLint configuration. The ui library is two levels deep
+// under the workspace root, so we need to go up two directories.
+import baseConfig from "../../eslint.config.mjs";
 
 export default [
     ...nx.configs["flat/react"],
