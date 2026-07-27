@@ -78,6 +78,9 @@ jobs:
     - name: Debug: List contents of current directory
       run: ls -la
       
+    - name: Debug: Check web-app build directory
+      run: find . -path "*/web-app/dist" -type d
+      
     - name: Deploy to GitHub Pages using GitHub Actions
       uses: actions/configure-pages@v4
     - name: Upload GitHub Pages artifact
