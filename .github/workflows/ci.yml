@@ -72,6 +72,9 @@ jobs:
     - name: Build web app
       run: npx nx build web-app
       
+    - name: List dist directory for debugging
+      run: ls -la dist/
+      
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v4
       with:
