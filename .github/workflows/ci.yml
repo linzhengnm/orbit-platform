@@ -72,6 +72,12 @@ jobs:
     - name: Build web app
       run: npx nx build web-app
       
+    - name: Debug: List all files in workspace
+      run: find . -type d -name "dist" -o -name "build" | head -20
+      
+    - name: Debug: List contents of current directory
+      run: ls -la
+      
     - name: Deploy to GitHub Pages using GitHub Actions
       uses: actions/configure-pages@v4
     - name: Upload GitHub Pages artifact
