@@ -80,3 +80,5 @@ jobs:
         # Use the correct branch name for GitHub Pages
         # This ensures we're deploying to the right branch (gh-pages)
         destination_dir: .
+        # Add this to make sure we're using the right branch
+        publish_branch: gh-pages
