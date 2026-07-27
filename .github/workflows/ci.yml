@@ -72,9 +72,6 @@ jobs:
     - name: Build web app
       run: npx nx build web-app
       
-    - name: List dist directory for debugging
-      run: ls -la dist/
-      
     - name: Deploy to GitHub Pages using GitHub Actions
       uses: actions/configure-pages@v4
     - name: Upload GitHub Pages artifact
