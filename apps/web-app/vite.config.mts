@@ -3,7 +3,10 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-export default defineConfig(() => ({
+const repoBase = '/orbit-platform/';
+
+export default defineConfig(({ mode }) => ({
+  base: mode === 'production' ? repoBase : '/',
   root: import.meta.dirname,
   cacheDir: '../../node_modules/.vite/apps/web-app',
   server:{
