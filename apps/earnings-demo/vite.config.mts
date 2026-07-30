@@ -16,7 +16,15 @@ export default defineConfig(() => ({
     port: 4200,
     host: 'localhost',
   },
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'inject-base',
+      transformIndexHtml() {
+        return [{ tag: 'base', attrs: { href: base }, injectTo: 'head-prepend' }];
+      },
+    },
+  ],
   // Uncomment this if you are using workers.
   // worker: {
   //  plugins: [],

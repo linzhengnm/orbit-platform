@@ -69,18 +69,62 @@ jobs:
       env:
         NODE_OPTIONS: --max-old-space-size=4096
       
-    - name: Build earnings demo
+    - name: Build earnings-demo
       run: npx nx build earnings-demo
       env:
         VITE_FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-        VITE_BASE_URL: /${{ github.event.repository.name }}/
-      
+        VITE_BASE_URL: /${{ github.event.repository.name }}/earnings-demo/
+
+    - name: Build web-app
+      run: npx nx build web-app
+      env:
+        VITE_BASE_URL: /${{ github.event.repository.name }}/app/
+
+    - name: Aggregate builds into deploy root
+      run: |
+        mkdir -p dist/earnings-demo dist/app
+        cp -r apps/earnings-demo/dist/* dist/earnings-demo/
+        cp -r apps/web-app/dist/* dist/app/
+        cat > dist/index.html << 'HTML'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <title>Orbit Platform</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { font-family: Inter, system-ui, sans-serif; background: #f0f4ff; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+            .card { background: white; border-radius: 24px; padding: 3rem; box-shadow: 0 20px 45px rgba(15,23,42,0.12); text-align: center; max-width: 480px; }
+            h1 { font-size: 1.8rem; color: #0f172a; margin-bottom: 0.5rem; }
+            p { color: #475569; margin-bottom: 2rem; }
+            .links { display: flex; flex-direction: column; gap: 0.75rem; }
+            a { display: block; padding: 0.85rem 1.5rem; border-radius: 999px; text-decoration: none; font-weight: 600; transition: background 0.2s; }
+            a.primary { background: #4f46e5; color: white; }
+            a.primary:hover { background: #4338ca; }
+            a.secondary { background: #e2e8f0; color: #0f172a; }
+            a.secondary:hover { background: #cbd5e1; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>Orbit Platform</h1>
+            <p>Select an app to get started.</p>
+            <div class="links">
+              <a class="primary" href="earnings-demo/">Earnings Comparison</a>
+              <a class="secondary" href="app/">Main App</a>
+            </div>
+          </div>
+        </body>
+        </html>
+        HTML
+
     - name: Deploy to GitHub Pages using GitHub Actions
       uses: actions/configure-pages@v4
     - name: Upload GitHub Pages artifact
       uses: actions/upload-pages-artifact@v3
       with:
-        path: ./apps/earnings-demo/dist
+        path: ./dist
     - name: Deploy to GitHub Pages
       id: deployment
       uses: actions/deploy-pages@v4
