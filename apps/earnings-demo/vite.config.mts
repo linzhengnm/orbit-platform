@@ -2,8 +2,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const base = process.env.VITE_BASE_URL || '/';
+
 export default defineConfig(() => ({
   root: import.meta.dirname,
+  base,
   cacheDir: '../../node_modules/.vite/apps/earnings-demo',
   server: {
     port: 4200,

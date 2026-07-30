@@ -73,6 +73,7 @@ jobs:
       run: npx nx build earnings-demo
       env:
         VITE_FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        VITE_BASE_URL: /${{ github.event.repository.name }}/
       
     - name: Deploy to GitHub Pages using GitHub Actions
       uses: actions/configure-pages@v4
