@@ -1,0 +1,415 @@
+.page {
+  min-height: 100vh;
+  background: #f0f4ff;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  padding: 2rem 1rem;
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.kicker {
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #4f46e5;
+}
+
+.header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 2rem;
+  color: #0f172a;
+}
+
+.subtitle {
+  color: #475569;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.searchArea {
+  position: relative;
+  max-width: 480px;
+  margin: 0 auto 1.5rem;
+}
+
+.searchInputWrap {
+  position: relative;
+}
+
+.searchInput {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  padding: 0.85rem 1.25rem;
+  font-size: 1rem;
+  background: white;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.searchInput:focus {
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+}
+
+.searchInput:disabled {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+  margin-top: 0.5rem;
+  padding: 0.5rem 0;
+  list-style: none;
+  z-index: 50;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.dropdownItem:hover {
+  background: #f1f5f9;
+}
+
+.dropdownSymbol {
+  font-weight: 700;
+  color: #0f172a;
+  font-size: 0.9rem;
+  min-width: 60px;
+}
+
+.dropdownName {
+  color: #475569;
+  font-size: 0.85rem;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdownMeta {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  padding: 0.15rem 0.4rem;
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.selectedBar {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.selectedTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 0.5rem 0.75rem 0.5rem 1rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.tagRemove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #4338ca;
+  opacity: 0.6;
+  font-size: 0.8rem;
+  padding: 0;
+}
+
+.tagRemove:hover {
+  opacity: 1;
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.companyName {
+  margin: 0 0 0.15rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.cardActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.badgeBeat {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.badgeMiss {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.badgeNeutral {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.removeBtn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 0.7rem;
+}
+
+.removeBtn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.metric {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.metricLabel {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #64748b;
+  min-width: 120px;
+}
+
+.metricValue {
+  font-weight: 600;
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.metricDelta {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #16a34a;
+}
+
+.noData {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.comparisonSection {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+}
+
+.comparisonSection h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: #0f172a;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.table td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.colA {
+  min-width: 120px;
+}
+
+.colB {
+  min-width: 120px;
+}
+
+.metricName {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.better {
+  background: #f0fdf4;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.star {
+  color: #16a34a;
+}
+
+.peersSection {
+  background: white;
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.peersSection h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  color: #0f172a;
+}
+
+.peerGroups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.peerGroup h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.peerChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.peerChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #eef2ff;
+  color: #4338ca;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+}
+
+.peerName {
+  color: #6366f1;
+  font-weight: 400;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyState {
+  text-align: center;
+  padding: 2rem;
+  color: #64748b;
+}
+
+.error {
+  text-align: center;
+  padding: 1rem;
+  color: #dc2626;
+  font-weight: 600;
+  background: #fef2f2;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 1rem;
+  color: #4f46e5;
+  font-weight: 600;
+}

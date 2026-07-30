@@ -17,6 +17,12 @@
     },
     {
       "path": "./libs/ui"
+    },
+    {
+      "path": "./apps/earnings-demo-e2e"
+    },
+    {
+      "path": "./apps/earnings-demo"
     }
   ],
   "compilerOptions": {}

@@ -199,6 +199,14 @@ importers:
         specifier: ^5.1.0
         version: 5.2.1(supports-color@8.1.1)
 
+  apps/earnings-demo:
+    dependencies:
+      '@org/shared-utils':
+        specifier: workspace:*
+        version: link:../../libs/utils
+
+  apps/earnings-demo-e2e: {}
+
   apps/web-app: {}
 
   apps/web-app-e2e: {}
