@@ -206,3 +206,26 @@ export async function compareCompanies(a: string, b: string): Promise<Comparison
     return null;
   }
 }
+
+export interface CompanyDetail {
+  company: Company;
+  earnings: EarningsEvent[];
+  peers: PeerSuggestion[];
+}
+
+export async function fetchCompanyEarnings(symbol: string): Promise<CompanyDetail | null> {
+  if (!API_KEY) return null;
+
+  try {
+    const [company, earnings, peers] = await Promise.all([
+      fetchProfile(symbol),
+      fetchEarnings(symbol),
+      fetchPeers(symbol),
+    ]);
+
+    if (!company) return null;
+    return { company, earnings, peers };
+  } catch {
+    return null;
+  }
+}

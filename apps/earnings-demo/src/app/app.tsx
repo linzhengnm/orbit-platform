@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { buildEarningsView } from '@org/shared-utils';
-import { searchCompanies, compareCompanies } from './api';
-import type { Company, EarningsEvent, ComparisonResult } from './api';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { searchCompanies, fetchCompanyEarnings } from './api';
+import type { Company, EarningsEvent, PeerSuggestion } from './api';
 import styles from './app.module.css';
-
-type ViewItem = ReturnType<typeof buildEarningsView>[number];
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -16,30 +13,18 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 function SearchDropdown({
-  query,
-  results,
-  loading,
-  selected,
-  onSelect,
+  query, results, loading, onSelect,
 }: {
-  query: string;
-  results: Company[];
-  loading: boolean;
-  selected: string[];
-  onSelect: (c: Company) => void;
+  query: string; results: Company[]; loading: boolean; onSelect: (c: Company) => void;
 }) {
-  if (!query.trim() || results.length === 0 || selected.length >= 2) return null;
+  if (!query.trim() || results.length === 0) return null;
   return (
     <ul className={styles.dropdown}>
       {loading ? (
         <li className={styles.dropdownItem}>Searching...</li>
       ) : (
         results.map((c) => (
-          <li
-            key={c.symbol}
-            className={styles.dropdownItem}
-            onClick={() => onSelect(c)}
-          >
+          <li key={c.symbol} className={styles.dropdownItem} onClick={() => onSelect(c)}>
             <span className={styles.dropdownSymbol}>{c.symbol}</span>
             <span className={styles.dropdownName}>{c.name}</span>
             {c.sector && <span className={styles.dropdownMeta}>{c.sector}</span>}
@@ -50,229 +35,83 @@ function SearchDropdown({
   );
 }
 
-function SummaryCard({
-  company,
-  view,
-  earnings,
-  onRemove,
-}: {
-  company: Company;
-  view: ViewItem | undefined;
-  earnings: EarningsEvent[];
-  onRemove: () => void;
-}) {
-  const latest = earnings[0];
-  return (
-    <article className={styles.card}>
-      <div className={styles.cardHeader}>
-        <div>
-          <p className={styles.companyName}>{company.name}</p>
-          <h2>{company.symbol}</h2>
-        </div>
-        <div className={styles.cardActions}>
-          {view && (
-            <span
-              className={`${styles.badge} ${
-                view.signal === 'beat'
-                  ? styles.badgeBeat
-                  : view.signal === 'miss'
-                    ? styles.badgeMiss
-                    : styles.badgeNeutral
-              }`}
-            >
-              {view.signal}
-            </span>
-          )}
-          <button className={styles.removeBtn} onClick={onRemove} aria-label="Remove">
-            ✕
-          </button>
-        </div>
-      </div>
-
-      {view && (
-        <div className={styles.metrics}>
-          <div className={styles.metric}>
-            <span className={styles.metricLabel}>EPS Surprise</span>
-            <span className={styles.metricValue}>
-              {view.epsDelta != null ? `${view.epsDelta.toFixed(3)}` : '—'}
-            </span>
-            {view.epsDeltaPct != null && (
-              <span className={styles.metricDelta}>
-                {view.epsDeltaPct >= 0 ? '+' : ''}{view.epsDeltaPct.toFixed(1)}%
-              </span>
-            )}
-          </div>
-          <div className={styles.metric}>
-            <span className={styles.metricLabel}>Revenue Surprise</span>
-            <span className={styles.metricValue}>
-              {view.revenueDelta != null
-                ? `$${(view.revenueDelta / 1_000_000_000).toFixed(2)}B`
-                : '—'}
-            </span>
-            {view.revenueDeltaPct != null && (
-              <span className={styles.metricDelta}>
-                {view.revenueDeltaPct >= 0 ? '+' : ''}{view.revenueDeltaPct.toFixed(1)}%
-              </span>
-            )}
-          </div>
-          <div className={styles.metric}>
-            <span className={styles.metricLabel}>Net Margin</span>
-            <span className={styles.metricValue}>
-              {view.netMarginPct != null ? `${view.netMarginPct.toFixed(1)}%` : '—'}
-            </span>
-          </div>
-          {latest && (
-            <div className={styles.metric}>
-              <span className={styles.metricLabel}>Latest Quarter</span>
-              <span className={styles.metricValue}>
-                Q{latest.quarter} {latest.year}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {!view && earnings.length === 0 && (
-        <p className={styles.noData}>No earnings data available</p>
-      )}
-    </article>
-  );
+function formatLarge(num: number | null | undefined, digits = 2): string {
+  if (num == null) return '—';
+  if (Math.abs(num) >= 1e12) return `$${(num / 1e12).toFixed(digits)}T`;
+  if (Math.abs(num) >= 1e9) return `$${(num / 1e9).toFixed(digits)}B`;
+  if (Math.abs(num) >= 1e6) return `$${(num / 1e6).toFixed(digits)}M`;
+  return String(num);
 }
 
-function ComparisonTable({
-  companyA,
-  companyB,
-  viewA,
-  viewB,
-  earningsA,
-  earningsB,
-}: {
-  companyA: Company;
-  companyB: Company;
-  viewA: ViewItem | undefined;
-  viewB: ViewItem | undefined;
-  earningsA: EarningsEvent[];
-  earningsB: EarningsEvent[];
-}) {
-  if (!viewA && !viewB) return null;
+function pct(n: number | null | undefined): string {
+  if (n == null) return '—';
+  return `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`;
+}
 
-  const rows: Array<{ label: string; valA: string; valB: string; better: 'A' | 'B' | 'tie' | null }> = [];
+function qoqGrowth(current: number | null, previous: number | null): number | null {
+  if (current == null || previous == null || previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
 
-  if (viewA && viewB) {
-    rows.push({
-      label: 'EPS Surprise ($)',
-      valA: viewA.epsDelta != null ? viewA.epsDelta.toFixed(3) : '—',
-      valB: viewB.epsDelta != null ? viewB.epsDelta.toFixed(3) : '—',
-      better:
-        viewA.epsDelta != null && viewB.epsDelta != null
-          ? viewA.epsDelta > viewB.epsDelta
-            ? 'A'
-            : viewB.epsDelta > viewA.epsDelta
-              ? 'B'
-              : 'tie'
-          : null,
-    });
-    rows.push({
-      label: 'EPS Surprise %',
-      valA: viewA.epsDeltaPct != null ? `${(viewA.epsDeltaPct >= 0 ? '+' : '')}${viewA.epsDeltaPct.toFixed(1)}%` : '—',
-      valB: viewB.epsDeltaPct != null ? `${(viewB.epsDeltaPct >= 0 ? '+' : '')}${viewB.epsDeltaPct.toFixed(1)}%` : '—',
-      better:
-        viewA.epsDeltaPct != null && viewB.epsDeltaPct != null
-          ? viewA.epsDeltaPct > viewB.epsDeltaPct
-            ? 'A'
-            : viewB.epsDeltaPct > viewA.epsDeltaPct
-              ? 'B'
-              : 'tie'
-          : null,
-    });
-    rows.push({
-      label: 'Revenue Surprise ($)',
-      valA: viewA.revenueDelta != null ? `$${(viewA.revenueDelta / 1_000_000_000).toFixed(2)}B` : '—',
-      valB: viewB.revenueDelta != null ? `$${(viewB.revenueDelta / 1_000_000_000).toFixed(2)}B` : '—',
-      better:
-        viewA.revenueDelta != null && viewB.revenueDelta != null
-          ? viewA.revenueDelta > viewB.revenueDelta
-            ? 'A'
-            : viewB.revenueDelta > viewA.revenueDelta
-              ? 'B'
-              : 'tie'
-          : null,
-    });
-    rows.push({
-      label: 'Revenue Surprise %',
-      valA: viewA.revenueDeltaPct != null ? `${(viewA.revenueDeltaPct >= 0 ? '+' : '')}${viewA.revenueDeltaPct.toFixed(1)}%` : '—',
-      valB: viewB.revenueDeltaPct != null ? `${(viewB.revenueDeltaPct >= 0 ? '+' : '')}${viewB.revenueDeltaPct.toFixed(1)}%` : '—',
-      better:
-        viewA.revenueDeltaPct != null && viewB.revenueDeltaPct != null
-          ? viewA.revenueDeltaPct > viewB.revenueDeltaPct
-            ? 'A'
-            : viewB.revenueDeltaPct > viewA.revenueDeltaPct
-              ? 'B'
-              : 'tie'
-          : null,
-    });
-    rows.push({
-      label: 'Net Margin',
-      valA: viewA.netMarginPct != null ? `${viewA.netMarginPct.toFixed(1)}%` : '—',
-      valB: viewB.netMarginPct != null ? `${viewB.netMarginPct.toFixed(1)}%` : '—',
-      better:
-        viewA.netMarginPct != null && viewB.netMarginPct != null
-          ? viewA.netMarginPct > viewB.netMarginPct
-            ? 'A'
-            : viewB.netMarginPct > viewA.netMarginPct
-              ? 'B'
-              : 'tie'
-          : null,
-    });
-  }
+function yoyGrowth(current: EarningsEvent | null, previous: EarningsEvent | null): number | null {
+  if (!current || !previous) return null;
+  return qoqGrowth(current.epsActual, previous.epsActual);
+}
 
-  rows.push({
-    label: 'Latest Quarter',
-    valA: earningsA[0] ? `Q${earningsA[0].quarter} ${earningsA[0].year}` : '—',
-    valB: earningsB[0] ? `Q${earningsB[0].quarter} ${earningsB[0].year}` : '—',
-    better: null,
-  });
+function QuarterTable({ earnings }: { earnings: EarningsEvent[] }) {
+  if (earnings.length === 0) return null;
 
-  rows.push({
-    label: 'EPS (Actual)',
-    valA: earningsA[0]?.epsActual != null ? earningsA[0].epsActual.toFixed(2) : '—',
-    valB: earningsB[0]?.epsActual != null ? earningsB[0].epsActual.toFixed(2) : '—',
-    better: null,
-  });
-
-  rows.push({
-    label: 'Revenue (Actual)',
-    valA: earningsA[0]?.revenueActual != null ? `$${(earningsA[0].revenueActual / 1_000_000_000).toFixed(2)}B` : '—',
-    valB: earningsB[0]?.revenueActual != null ? `$${(earningsB[0].revenueActual / 1_000_000_000).toFixed(2)}B` : '—',
-    better: null,
-  });
+  const sorted = [...earnings].sort((a, b) => b.year - a.year || b.quarter - a.quarter);
 
   return (
-    <section className={styles.comparisonSection}>
-      <h2>Comparison</h2>
+    <section className={styles.section}>
+      <h2>Quarterly Earnings</h2>
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Metric</th>
-              <th className={styles.colA}>{companyA.symbol}</th>
-              <th className={styles.colB}>{companyB.symbol}</th>
+              <th>Quarter</th>
+              <th>EPS Actual</th>
+              <th>EPS Estimate</th>
+              <th>Surprise %</th>
+              <th>Revenue</th>
+              <th>Beat/Miss</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.label}>
-                <td className={styles.metricName}>{row.label}</td>
-                <td className={`${styles.colA} ${row.better === 'A' ? styles.better : ''}`}>
-                  {row.valA}
-                  {row.better === 'A' && <span className={styles.star}> ★</span>}
-                </td>
-                <td className={`${styles.colB} ${row.better === 'B' ? styles.better : ''}`}>
-                  {row.valB}
-                  {row.better === 'B' && <span className={styles.star}> ★</span>}
-                </td>
-              </tr>
-            ))}
+            {sorted.map((e, i) => {
+              const next = sorted[i + 1] ?? null;
+              const epsGrowth = qoqGrowth(e.epsActual, next?.epsActual ?? null);
+              const isBeat = e.epsActual != null && e.epsEstimate != null && e.epsActual > e.epsEstimate;
+              const isMiss = e.epsActual != null && e.epsEstimate != null && e.epsActual < e.epsEstimate;
+              return (
+                <tr key={`${e.year}q${e.quarter}`}>
+                  <td className={styles.quarterLabel}>Q{e.quarter} {e.year}</td>
+                  <td className={styles.epsCell}>
+                    <span>{e.epsActual != null ? e.epsActual.toFixed(2) : '—'}</span>
+                    {epsGrowth != null && (
+                      <span className={epsGrowth >= 0 ? styles.trendUp : styles.trendDown}>
+                        {epsGrowth >= 0 ? '▲' : '▼'} {Math.abs(epsGrowth).toFixed(1)}%
+                      </span>
+                    )}
+                  </td>
+                  <td>{e.epsEstimate != null ? e.epsEstimate.toFixed(2) : '—'}</td>
+                  <td>
+                    {e.epsSurprisePct != null ? (
+                      <span className={e.epsSurprisePct >= 0 ? styles.surpriseBeat : styles.surpriseMiss}>
+                        {pct(e.epsSurprisePct)}
+                      </span>
+                    ) : '—'}
+                  </td>
+                  <td>{formatLarge(e.revenueActual)}</td>
+                  <td>
+                    {isBeat && <span className={styles.badgeBeat}>Beat</span>}
+                    {isMiss && <span className={styles.badgeMiss}>Miss</span>}
+                    {!isBeat && !isMiss && <span className={styles.badgeNeutral}>In-line</span>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -280,17 +119,68 @@ function ComparisonTable({
   );
 }
 
-function PeerList({
-  title,
-  peers,
-}: {
-  title: string;
-  peers: Array<{ symbol: string; name: string | null }>;
-}) {
+function TrendBar({ earnings }: { earnings: EarningsEvent[] }) {
+  if (earnings.length < 2) return null;
+
+  const sorted = [...earnings].sort((a, b) => b.year - a.year || b.quarter - a.quarter);
+  const latest = sorted[0];
+  const prev = sorted[1];
+  const epsQoQ = qoqGrowth(latest?.epsActual, prev?.epsActual);
+  const sameQuarterLastYear = sorted.find((e) => e.quarter === latest?.quarter && e.year === latest?.year - 1);
+  const epsYoY = yoyGrowth(latest, sameQuarterLastYear);
+
+  const avgSurprise = earnings.reduce((sum, e) => sum + (e.epsSurprisePct ?? 0), 0) / earnings.length;
+  const beats = earnings.filter((e) => e.epsActual != null && e.epsEstimate != null && e.epsActual > e.epsEstimate).length;
+  const misses = earnings.filter((e) => e.epsActual != null && e.epsEstimate != null && e.epsActual < e.epsEstimate).length;
+
+  const items: Array<{ label: string; value: string; color: string }> = [
+    { label: 'Avg Surprise', value: pct(avgSurprise), color: avgSurprise >= 0 ? '#16a34a' : '#dc2626' },
+    { label: 'Beat Streak', value: `${beats}-${misses}`, color: beats >= misses ? '#16a34a' : '#dc2626' },
+    { label: 'EPS QoQ', value: epsQoQ != null ? pct(epsQoQ) : '—', color: epsQoQ != null ? (epsQoQ >= 0 ? '#16a34a' : '#dc2626') : '#64748b' },
+    { label: 'EPS YoY', value: epsYoY != null ? pct(epsYoY) : '—', color: epsYoY != null ? (epsYoY >= 0 ? '#16a34a' : '#dc2626') : '#64748b' },
+    { label: 'Total Quarters', value: String(earnings.length), color: '#4f46e5' },
+  ];
+
+  return (
+    <section className={styles.section}>
+      <h2>Trends</h2>
+      <div className={styles.trendGrid}>
+        {items.map((item) => (
+          <div key={item.label} className={styles.trendCard}>
+            <span className={styles.trendLabel}>{item.label}</span>
+            <span className={styles.trendValue} style={{ color: item.color }}>{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function CompanyProfile({ company }: { company: Company }) {
+  return (
+    <div className={styles.profile}>
+      <div className={styles.profileInfo}>
+        {company.logo && <img src={company.logo} alt="" className={styles.logo} />}
+        <div>
+          <h2 className={styles.profileName}>{company.name}</h2>
+          <div className={styles.profileMeta}>
+            <span className={styles.profileSymbol}>{company.symbol}</span>
+            {company.exchange && <span>{company.exchange}</span>}
+            {company.sector && <span>{company.sector}</span>}
+            {company.industry && <span>{company.industry}</span>}
+            {company.marketCap != null && <span>MCap: ${(company.marketCap / 1000).toFixed(1)}B</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PeerSuggestions({ peers }: { peers: PeerSuggestion[] }) {
   if (peers.length === 0) return null;
   return (
-    <div className={styles.peerGroup}>
-      <h3>{title}</h3>
+    <section className={styles.section}>
+      <h2>Peer Companies</h2>
       <div className={styles.peerChips}>
         {peers.map((p) => (
           <span key={p.symbol} className={styles.peerChip}>
@@ -299,7 +189,7 @@ function PeerList({
           </span>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -307,26 +197,22 @@ export function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Company[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [selectedCompanies, setSelectedCompanies] = useState<Company[]>([]);
-  const [comparison, setComparison] = useState<ComparisonResult | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
+  const [earnings, setEarnings] = useState<EarningsEvent[]>([]);
+  const [peers, setPeers] = useState<PeerSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const debouncedQuery = useDebounce(searchQuery, 250);
 
   useEffect(() => {
-    if (!debouncedQuery.trim() || selectedCompanies.length >= 2) {
-      setSearchResults([]);
-      return;
-    }
+    if (!debouncedQuery.trim()) { setSearchResults([]); return; }
     setSearchLoading(true);
     searchCompanies(debouncedQuery)
-      .then((results) => {
-        setSearchResults(results.filter((c) => !selectedCompanies.find((s) => s.symbol === c.symbol)));
-      })
+      .then((results) => setSearchResults(results))
       .catch(() => setSearchResults([]))
       .finally(() => setSearchLoading(false));
-  }, [debouncedQuery, selectedCompanies]);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -338,101 +224,47 @@ export function App() {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const loadDefault = useCallback(async () => {
+  useEffect(() => {
+    if (selectedCompany) return;
     setLoading(true);
     setError(null);
-    try {
-      const result = await compareCompanies('AAPL', 'MSFT');
-      if (result) {
-        setSelectedCompanies([result.companyA, result.companyB]);
-        setComparison(result);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load default');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadDefault();
-  }, [loadDefault]);
+    fetchCompanyEarnings('AAPL')
+      .then((d) => {
+        if (d) { setSelectedCompany(d.company); setEarnings(d.earnings); setPeers(d.peers); }
+      })
+      .catch(() => setError('Failed to load default'))
+      .finally(() => setLoading(false));
+  }, [selectedCompany]);
 
   const handleSelect = async (company: Company) => {
-    if (selectedCompanies.length >= 2) return;
-    const next = [...selectedCompanies, company];
-    setSelectedCompanies(next);
     setSearchQuery('');
     setSearchResults([]);
-
-    if (next.length === 2) {
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await compareCompanies(next[0].symbol, next[1].symbol);
-        setComparison(result);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Comparison failed');
-      } finally {
-        setLoading(false);
-      }
-    }
-  };
-
-  const handleRemove = (symbol: string) => {
-    const next = selectedCompanies.filter((c) => c.symbol !== symbol);
-    setSelectedCompanies(next);
-    if (next.length < 2) {
-      setComparison(null);
-    }
+    setSelectedCompany(null);
+    setLoading(true);
     setError(null);
+    const d = await fetchCompanyEarnings(company.symbol);
+    if (d) {
+      setSelectedCompany(d.company);
+      setEarnings(d.earnings);
+      setPeers(d.peers);
+    } else {
+      setError('Failed to load company data');
+    }
+    setLoading(false);
   };
 
-  const viewA = useMemo(() => {
-    if (!comparison) return undefined;
-    return buildEarningsView(
-      comparison.earningsA.map((e) => ({
-        label: `Q${e.quarter} ${e.year}`,
-        epsActual: e.epsActual,
-        epsEstimate: e.epsEstimate,
-        revenueActual: e.revenueActual,
-        revenueEstimate: e.revenueEstimate,
-        netIncome: null,
-      }))
-    )[0];
-  }, [comparison]);
-
-  const viewB = useMemo(() => {
-    if (!comparison) return undefined;
-    return buildEarningsView(
-      comparison.earningsB.map((e) => ({
-        label: `Q${e.quarter} ${e.year}`,
-        epsActual: e.epsActual,
-        epsEstimate: e.epsEstimate,
-        revenueActual: e.revenueActual,
-        revenueEstimate: e.revenueEstimate,
-        netIncome: null,
-      }))
-    )[0];
-  }, [comparison]);
-
-  const combinedPeers = useMemo(() => {
-    if (!comparison) return { a: [], b: [] };
-    return {
-      a: comparison.peersA.filter((p) => p.symbol !== comparison.companyB.symbol),
-      b: comparison.peersB.filter((p) => p.symbol !== comparison.companyA.symbol),
-    };
-  }, [comparison]);
+  const latestEarnings = useMemo(() => {
+    const sorted = [...earnings].sort((a, b) => b.year - a.year || b.quarter - a.quarter);
+    return sorted[0] ?? null;
+  }, [earnings]);
 
   return (
     <main className={styles.page}>
       <div className={styles.container}>
         <header className={styles.header}>
-          <p className={styles.kicker}>Earnings Comparison</p>
-          <h1>Compare Company Earnings</h1>
-          <p className={styles.subtitle}>
-            Search for US-listed companies to compare their latest earnings performance.
-          </p>
+          <p className={styles.kicker}>Earnings Demo</p>
+          <h1>Company Earnings History</h1>
+          <p className={styles.subtitle}>Search a US-listed company to view its quarterly earnings performance.</p>
         </header>
 
         <div className={styles.searchArea} ref={searchRef}>
@@ -440,88 +272,57 @@ export function App() {
             <input
               className={styles.searchInput}
               type="text"
-              placeholder={
-                selectedCompanies.length >= 2
-                  ? 'Max 2 companies selected'
-                  : selectedCompanies.length === 1
-                    ? 'Search for a second company...'
-                    : 'Search by company name or ticker...'
-              }
+              placeholder="Search by company name or ticker..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              disabled={selectedCompanies.length >= 2}
             />
           </div>
-          <SearchDropdown
-            query={searchQuery}
-            results={searchResults}
-            loading={searchLoading}
-            selected={selectedCompanies.map((c) => c.symbol)}
-            onSelect={handleSelect}
-          />
+          <SearchDropdown query={searchQuery} results={searchResults} loading={searchLoading} onSelect={handleSelect} />
         </div>
 
         {error && <p className={styles.error}>{error}</p>}
+        {loading && <p className={styles.loading}>Loading data...</p>}
 
-        {loading && <p className={styles.loading}>Loading comparison data...</p>}
+        {selectedCompany && !loading && (
+          <>
+            <CompanyProfile company={selectedCompany} />
 
-        {selectedCompanies.length > 0 && (
-          <div className={styles.selectedBar}>
-            {selectedCompanies.map((c) => (
-              <span key={c.symbol} className={styles.selectedTag}>
-                {c.symbol} — {c.name}
-                <button className={styles.tagRemove} onClick={() => handleRemove(c.symbol)}>
-                  ✕
-                </button>
-              </span>
-            ))}
-          </div>
+            {latestEarnings && (
+              <div className={styles.latestBar}>
+                <div className={styles.latestItem}>
+                  <span className={styles.latestLabel}>Latest Quarter</span>
+                  <span className={styles.latestValue}>Q{latestEarnings.quarter} {latestEarnings.year}</span>
+                </div>
+                <div className={styles.latestItem}>
+                  <span className={styles.latestLabel}>EPS</span>
+                  <span className={styles.latestValue}>{latestEarnings.epsActual?.toFixed(2) ?? '—'}</span>
+                  {latestEarnings.epsSurprisePct != null && (
+                    <span className={latestEarnings.epsSurprisePct >= 0 ? styles.upBadge : styles.downBadge}>
+                      {pct(latestEarnings.epsSurprisePct)}
+                    </span>
+                  )}
+                </div>
+                <div className={styles.latestItem}>
+                  <span className={styles.latestLabel}>Estimate</span>
+                  <span className={styles.latestValue}>{latestEarnings.epsEstimate?.toFixed(2) ?? '—'}</span>
+                </div>
+                <div className={styles.latestItem}>
+                  <span className={styles.latestLabel}>Revenue</span>
+                  <span className={styles.latestValue}>{formatLarge(latestEarnings.revenueActual)}</span>
+                </div>
+              </div>
+            )}
+
+            <QuarterTable earnings={earnings} />
+            <TrendBar earnings={earnings} />
+            <PeerSuggestions peers={peers} />
+          </>
         )}
 
-        {selectedCompanies.length < 2 && !loading && (
+        {!selectedCompany && !loading && !error && (
           <div className={styles.emptyState}>
-            <p>Select 2 companies to compare their earnings.</p>
+            <p>Select a company to view earnings history.</p>
           </div>
-        )}
-
-        <div className={styles.cardsGrid}>
-          {comparison && (
-            <>
-              <SummaryCard
-                company={comparison.companyA}
-                view={viewA}
-                earnings={comparison.earningsA}
-                onRemove={() => handleRemove(comparison.companyA.symbol)}
-              />
-              <SummaryCard
-                company={comparison.companyB}
-                view={viewB}
-                earnings={comparison.earningsB}
-                onRemove={() => handleRemove(comparison.companyB.symbol)}
-              />
-            </>
-          )}
-        </div>
-
-        {comparison && (
-          <ComparisonTable
-            companyA={comparison.companyA}
-            companyB={comparison.companyB}
-            viewA={viewA}
-            viewB={viewB}
-            earningsA={comparison.earningsA}
-            earningsB={comparison.earningsB}
-          />
-        )}
-
-        {comparison && (combinedPeers.a.length > 0 || combinedPeers.b.length > 0) && (
-          <section className={styles.peersSection}>
-            <h2>Peer Companies</h2>
-            <div className={styles.peerGroups}>
-              <PeerList title={`${comparison.companyA.symbol} peers`} peers={combinedPeers.a} />
-              <PeerList title={`${comparison.companyB.symbol} peers`} peers={combinedPeers.b} />
-            </div>
-          </section>
         )}
       </div>
     </main>
