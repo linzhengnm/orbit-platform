@@ -206,21 +206,19 @@ async function fetchPeers(symbol: string): Promise<PeerSuggestion[]> {
     const res = await fetch(finnhubUrl(`/stock/peers?symbol=${symbol}`));
     if (!res.ok) return [];
     const data: string[] = await res.json();
-    const peers: PeerSuggestion[] = [];
-    for (const s of data.slice(0, 8)) {
-      try {
-        const pRes = await fetch(finnhubUrl(`/stock/profile2?symbol=${s}`));
-        if (pRes.ok) {
+    const profiles = await Promise.all(
+      data.slice(0, 8).map(async (s) => {
+        try {
+          const pRes = await fetch(finnhubUrl(`/stock/profile2?symbol=${s}`));
+          if (!pRes.ok) return { symbol: s, name: null, sector: null, industry: null, marketCap: null };
           const p: FinnhubProfile = await pRes.json();
-          peers.push({ symbol: s, name: p.name || null, sector: p.sector || null, industry: p.finnhubIndustry || null, marketCap: p.marketCapitalization ? p.marketCapitalization * 1_000_000 : null });
-        } else {
-          peers.push({ symbol: s, name: null, sector: null, industry: null, marketCap: null });
+          return { symbol: s, name: p.name || null, sector: p.sector || null, industry: p.finnhubIndustry || null, marketCap: p.marketCapitalization ? p.marketCapitalization * 1_000_000 : null };
+        } catch {
+          return { symbol: s, name: null, sector: null, industry: null, marketCap: null };
         }
-      } catch {
-        peers.push({ symbol: s, name: null, sector: null, industry: null, marketCap: null });
-      }
-    }
-    return peers;
+      }),
+    );
+    return profiles;
   } catch {
     return [];
   }
@@ -301,23 +299,33 @@ export interface CompanyDetail {
   quote: Quote | null;
 }
 
+const companyDetailCache = new Map<string, CompanyDetail>();
+
 export async function fetchCompanyEarnings(symbol: string): Promise<CompanyDetail | null> {
-  if (!API_KEY) return getSeedDetail(symbol);
+  const key = symbol.toUpperCase();
+  const hit = companyDetailCache.get(key);
+  if (hit) return hit;
 
-  try {
-    const [company, earnings, peers, metrics, quote] = await Promise.all([
-      fetchProfile(symbol),
-      fetchEarnings(symbol),
-      fetchPeers(symbol),
-      fetchMetrics(symbol),
-      fetchQuote(symbol),
-    ]);
-
-    if (!company) return getSeedDetail(symbol);
-    return { company, earnings, peers, metrics, quote };
-  } catch {
-    return getSeedDetail(symbol);
+  let detail: CompanyDetail | null = null;
+  if (!API_KEY) {
+    detail = getSeedDetail(key);
+  } else {
+    try {
+      const [company, earnings, peers, metrics, quote] = await Promise.all([
+        fetchProfile(key),
+        fetchEarnings(key),
+        fetchPeers(key),
+        fetchMetrics(key),
+        fetchQuote(key),
+      ]);
+      detail = company ? { company, earnings, peers, metrics, quote } : getSeedDetail(key);
+    } catch {
+      detail = getSeedDetail(key);
+    }
   }
+
+  if (detail) companyDetailCache.set(key, detail);
+  return detail;
 }
 
 /* ── seed data fallback ── */
