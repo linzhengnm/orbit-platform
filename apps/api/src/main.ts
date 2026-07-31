@@ -1,13 +1,24 @@
 import express from 'express';
 import { config } from './config.js';
 import { searchSymbols, getCompanyProfile, getEarnings, getPeers, getFinancialsMetric } from './providers/finnhub.js';
+import { getEdgarActuals } from './providers/edgar.js';
 import { earningsSeedData } from './data/earnings-data.js';
 import type { Company, EarningsEvent, PeerSuggestion, ComparisonResult } from './types.js';
 
 const app = express();
 
+const allowedOrigins = [
+  'http://localhost:4200',
+  'https://linzhengnm.github.io',
+  process.env['CORS_ORIGIN'],
+].filter((o): o is string => Boolean(o));
+
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'http://localhost:4200');
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
 
@@ -155,6 +166,21 @@ app.get('/companies/:symbol/peers', async (req, res) => {
     res.json({ symbol, peers: [], source: 'none' });
   } catch {
     res.status(500).json({ error: 'Failed to fetch peers' });
+  }
+});
+
+app.get('/companies/:symbol/edgar-actuals', async (req, res) => {
+  const symbol = req.params.symbol.toUpperCase();
+
+  try {
+    const actuals = await getEdgarActuals(symbol);
+    if (!actuals) {
+      res.status(404).json({ error: `No SEC EDGAR data found for ${symbol}` });
+      return;
+    }
+    res.json({ symbol, actuals });
+  } catch (err) {
+    res.status(502).json({ error: `EDGAR proxy failed: ${(err as Error).message}` });
   }
 });
 

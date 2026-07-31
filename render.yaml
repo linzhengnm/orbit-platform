@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: orbit-api
+    runtime: node
+    plan: free
+    buildCommand: pnpm install --frozen-lockfile && pnpm exec nx build api --skip-nx-cache
+    startCommand: node apps/api/dist/main.js
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: HOST
+        value: 0.0.0.0
+      - key: CORS_ORIGIN
+        value: https://linzhengnm.github.io
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: EDGAR_USER_AGENT
+        sync: false

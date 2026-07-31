@@ -73,6 +73,7 @@ jobs:
       run: npx nx build earnings-demo
       env:
         VITE_FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        VITE_API_URL: ${{ secrets.API_URL }}
         VITE_BASE_URL: /${{ github.event.repository.name }}/earnings-demo/
 
     - name: Build web-app

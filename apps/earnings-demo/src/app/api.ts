@@ -103,6 +103,7 @@ interface FinnhubEarning {
   surprisePercent: number | null;
   symbol: string;
   year: number;
+  period?: string;
 }
 
 interface FinnhubQuote {
@@ -188,7 +189,7 @@ async function fetchEarnings(symbol: string): Promise<EarningsEvent[]> {
       symbol: e.symbol,
       quarter: e.quarter,
       year: e.year,
-      date: '',
+      date: e.period ?? '',
       epsActual: e.actual,
       epsEstimate: e.estimate,
       revenueActual: null,
@@ -270,6 +271,49 @@ export async function fetchTickerQuotes(symbols: string[]): Promise<TickerQuote[
   return quotes.filter((q) => q.price != null);
 }
 
+/* ── SEC EDGAR actuals fallback (via backend proxy) ── */
+
+export interface EdgarActual {
+  quarter: number;
+  year: number;
+  date: string;
+  epsActual: number | null;
+  revenueActual: number | null;
+}
+
+const EDGAR_API_URL = import.meta.env.VITE_API_URL ?? '';
+
+export async function fetchEdgarActuals(symbol: string): Promise<EdgarActual[] | null> {
+  if (!EDGAR_API_URL) return null;
+  try {
+    const res = await fetch(`${EDGAR_API_URL}/companies/${encodeURIComponent(symbol.toUpperCase())}/edgar-actuals`);
+    if (!res.ok) return null;
+    const data: { actuals: EdgarActual[] } = await res.json();
+    return data.actuals ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function monthKey(date: string): string {
+  return date ? date.slice(0, 7) : '';
+}
+
+function mergeEdgarActuals(earnings: EarningsEvent[], actuals: EdgarActual[] | null): EarningsEvent[] {
+  if (!actuals || actuals.length === 0) return earnings;
+  const byMonth = new Map(actuals.map((a) => [monthKey(a.date), a]));
+  return earnings.map((e) => {
+    const match = byMonth.get(monthKey(e.date));
+    if (!match) return e;
+    return {
+      ...e,
+      date: match.date || e.date,
+      epsActual: e.epsActual ?? match.epsActual,
+      revenueActual: e.revenueActual ?? match.revenueActual,
+    };
+  });
+}
+
 export async function compareCompanies(a: string, b: string): Promise<ComparisonResult | null> {
   if (!API_KEY) return null;
 
@@ -310,16 +354,43 @@ export async function fetchCompanyEarnings(symbol: string): Promise<CompanyDetai
   if (!API_KEY) {
     detail = getSeedDetail(key);
   } else {
-    try {
-      const [company, earnings, peers, metrics, quote] = await Promise.all([
-        fetchProfile(key),
-        fetchEarnings(key),
-        fetchPeers(key),
-        fetchMetrics(key),
-        fetchQuote(key),
-      ]);
-      detail = company ? { company, earnings, peers, metrics, quote } : getSeedDetail(key);
-    } catch {
+    const [edgarActuals, company, earnings, peers, metrics, quote] = await Promise.all([
+      fetchEdgarActuals(key).catch(() => null),
+      fetchProfile(key),
+      fetchEarnings(key),
+      fetchPeers(key),
+      fetchMetrics(key),
+      fetchQuote(key),
+    ]);
+
+    if (company) {
+      detail = {
+        company,
+        earnings: mergeEdgarActuals(earnings, edgarActuals),
+        peers,
+        metrics,
+        quote,
+      };
+    } else if (edgarActuals && edgarActuals.length > 0) {
+      detail = {
+        company: { symbol: key, name: key, sector: '', industry: '', marketCap: null, logo: null, exchange: null },
+        earnings: edgarActuals.map((a) => ({
+          symbol: key,
+          quarter: a.quarter,
+          year: a.year,
+          date: a.date,
+          epsActual: a.epsActual,
+          epsEstimate: null,
+          revenueActual: a.revenueActual,
+          revenueEstimate: null,
+          epsSurprisePct: null,
+          revenueSurprisePct: null,
+        })),
+        peers: [],
+        metrics: null,
+        quote: null,
+      };
+    } else {
       detail = getSeedDetail(key);
     }
   }

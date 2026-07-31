@@ -131,9 +131,9 @@ export async function getEarnings(symbol: string): Promise<EarningsEvent[]> {
     const data = await fetchJson<FinnhubEarningEvent[]>(`/stock/earnings?symbol=${symbol}`);
 
     return data.map((e) => {
-      let revenueActual: number | null = null;
-      let revenueEstimate: number | null = null;
-      let revenueSurprisePct: number | null = null;
+      const revenueActual: number | null = null;
+      const revenueEstimate: number | null = null;
+      const revenueSurprisePct: number | null = null;
 
       return {
         symbol: e.symbol,
