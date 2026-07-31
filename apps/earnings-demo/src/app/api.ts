@@ -46,6 +46,34 @@ export interface ComparisonResult {
   peersB: PeerSuggestion[];
 }
 
+export interface CompanyMetrics {
+  pe: number | null;
+  roe: number | null;
+  netMargin: number | null;
+  dividendYield: number | null;
+  week52High: number | null;
+  week52Low: number | null;
+  beta: number | null;
+  revenueGrowthYoy: number | null;
+  epsGrowthYoy: number | null;
+}
+
+export interface Quote {
+  price: number | null;
+  change: number | null;
+  changePct: number | null;
+  high: number | null;
+  low: number | null;
+  open: number | null;
+  prevClose: number | null;
+}
+
+export interface TickerQuote {
+  symbol: string;
+  price: number | null;
+  changePct: number | null;
+}
+
 interface FinnhubSymbolResult {
   description: string;
   displaySymbol: string;
@@ -75,6 +103,16 @@ interface FinnhubEarning {
   surprisePercent: number | null;
   symbol: string;
   year: number;
+}
+
+interface FinnhubQuote {
+  c: number | null;
+  d: number | null;
+  dp: number | null;
+  h: number | null;
+  l: number | null;
+  o: number | null;
+  pc: number | null;
 }
 
 export async function searchCompanies(query: string): Promise<Company[]> {
@@ -132,7 +170,7 @@ async function fetchProfile(symbol: string): Promise<Company | null> {
       name: p.name || symbol,
       sector: p.sector || '',
       industry: p.finnhubIndustry || '',
-      marketCap: p.marketCapitalization || null,
+      marketCap: p.marketCapitalization ? p.marketCapitalization * 1_000_000 : null,
       logo: p.logo || null,
       exchange: p.exchange || null,
     };
@@ -174,7 +212,7 @@ async function fetchPeers(symbol: string): Promise<PeerSuggestion[]> {
         const pRes = await fetch(finnhubUrl(`/stock/profile2?symbol=${s}`));
         if (pRes.ok) {
           const p: FinnhubProfile = await pRes.json();
-          peers.push({ symbol: s, name: p.name || null, sector: p.sector || null, industry: p.finnhubIndustry || null, marketCap: p.marketCapitalization || null });
+          peers.push({ symbol: s, name: p.name || null, sector: p.sector || null, industry: p.finnhubIndustry || null, marketCap: p.marketCapitalization ? p.marketCapitalization * 1_000_000 : null });
         } else {
           peers.push({ symbol: s, name: null, sector: null, industry: null, marketCap: null });
         }
@@ -186,6 +224,52 @@ async function fetchPeers(symbol: string): Promise<PeerSuggestion[]> {
   } catch {
     return [];
   }
+}
+
+async function fetchMetrics(symbol: string): Promise<CompanyMetrics | null> {
+  try {
+    const res = await fetch(finnhubUrl(`/stock/metric?symbol=${symbol}&metric=all`));
+    if (!res.ok) return null;
+    const data: { metric?: Record<string, number | null> } = await res.json();
+    const m = data.metric ?? {};
+    return {
+      pe: m.peTTM ?? null,
+      roe: m.roeTTM ?? null,
+      netMargin: m.netProfitMarginTTM ?? null,
+      dividendYield: m.dividendYieldIndicatedAnnual ?? null,
+      week52High: m['52WeekHigh'] ?? null,
+      week52Low: m['52WeekLow'] ?? null,
+      beta: m.beta ?? null,
+      revenueGrowthYoy: m.revenueGrowthTTMYoy ?? null,
+      epsGrowthYoy: m.epsGrowthTTMYoy ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function fetchQuote(symbol: string): Promise<Quote | null> {
+  try {
+    const res = await fetch(finnhubUrl(`/quote?symbol=${symbol}`));
+    if (!res.ok) return null;
+    const q: Partial<FinnhubQuote> = await res.json();
+    if (q.c == null) return null;
+    return {
+      price: q.c, change: q.d ?? null, changePct: q.dp ?? null,
+      high: q.h ?? null, low: q.l ?? null, open: q.o ?? null, prevClose: q.pc ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function fetchTickerQuotes(symbols: string[]): Promise<TickerQuote[]> {
+  if (!API_KEY) return [];
+  const quotes = await Promise.all(symbols.map(async (symbol) => {
+    const q = await fetchQuote(symbol);
+    return { symbol, price: q?.price ?? null, changePct: q?.changePct ?? null };
+  }));
+  return quotes.filter((q) => q.price != null);
 }
 
 export async function compareCompanies(a: string, b: string): Promise<ComparisonResult | null> {
@@ -213,20 +297,24 @@ export interface CompanyDetail {
   company: Company;
   earnings: EarningsEvent[];
   peers: PeerSuggestion[];
+  metrics: CompanyMetrics | null;
+  quote: Quote | null;
 }
 
 export async function fetchCompanyEarnings(symbol: string): Promise<CompanyDetail | null> {
   if (!API_KEY) return getSeedDetail(symbol);
 
   try {
-    const [company, earnings, peers] = await Promise.all([
+    const [company, earnings, peers, metrics, quote] = await Promise.all([
       fetchProfile(symbol),
       fetchEarnings(symbol),
       fetchPeers(symbol),
+      fetchMetrics(symbol),
+      fetchQuote(symbol),
     ]);
 
     if (!company) return getSeedDetail(symbol);
-    return { company, earnings, peers };
+    return { company, earnings, peers, metrics, quote };
   } catch {
     return getSeedDetail(symbol);
   }
@@ -317,6 +405,15 @@ const seedData: SeedEntry[] = [
   },
 ];
 
+const seedMetrics: Record<string, CompanyMetrics> = {
+  AAPL: { pe: 40.2, roe: 147, netMargin: 27.2, dividendYield: 0.32, week52High: 344.6, week52Low: 201.5, beta: 1.08, revenueGrowthYoy: 12.8, epsGrowthYoy: 29.0 },
+  MSFT: { pe: 38.4, roe: 40.1, netMargin: 36.5, dividendYield: 0.7, week52High: 468.2, week52Low: 402.4, beta: 0.9, revenueGrowthYoy: 17.2, epsGrowthYoy: 24.6 },
+  NVDA: { pe: 52.6, roe: 110.4, netMargin: 55.8, dividendYield: 0.03, week52High: 175.3, week52Low: 92.4, beta: 1.68, revenueGrowthYoy: 82.4, epsGrowthYoy: 110.2 },
+  GOOGL: { pe: 27.1, roe: 32.6, netMargin: 30.1, dividendYield: 0.42, week52High: 205.6, week52Low: 148.2, beta: 1.05, revenueGrowthYoy: 14.8, epsGrowthYoy: 28.3 },
+  AMD: { pe: 45.8, roe: 15.2, netMargin: 12.4, dividendYield: 0.0, week52High: 178.4, week52Low: 98.2, beta: 1.61, revenueGrowthYoy: 22.5, epsGrowthYoy: 18.4 },
+  META: { pe: 30.4, roe: 34.8, netMargin: 34.2, dividendYield: 0.38, week52High: 635.2, week52Low: 472.6, beta: 1.23, revenueGrowthYoy: 19.4, epsGrowthYoy: 26.1 },
+};
+
 function seedToCompany(s: SeedEntry): Company {
   return { symbol: s.symbol, name: s.name, sector: s.sector, industry: s.industry, marketCap: s.marketCap, logo: null, exchange: s.exchange };
 }
@@ -346,7 +443,13 @@ function seedToPeers(s: SeedEntry): PeerSuggestion[] {
 function getSeedDetail(symbol: string): CompanyDetail | null {
   const s = seedData.find((x) => x.symbol === symbol.toUpperCase());
   if (!s) return null;
-  return { company: seedToCompany(s), earnings: seedToEarnings(s), peers: seedToPeers(s) };
+  return {
+    company: seedToCompany(s),
+    earnings: seedToEarnings(s),
+    peers: seedToPeers(s),
+    metrics: seedMetrics[s.symbol] ?? null,
+    quote: null,
+  };
 }
 
 export function getSeedSearchResults(query: string): Company[] {
