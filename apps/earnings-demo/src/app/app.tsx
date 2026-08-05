@@ -298,6 +298,7 @@ function QuarterTable({ earnings }: { earnings: EarningsEvent[] }) {
               <th>EPS Estimate</th>
               <th>Surprise %</th>
               <th>Revenue</th>
+              <th>CAPEX</th>
               <th>Beat/Miss</th>
             </tr>
           </thead>
@@ -327,6 +328,7 @@ function QuarterTable({ earnings }: { earnings: EarningsEvent[] }) {
                     ) : '—'}
                   </td>
                   <td>{formatLarge(e.revenueActual)}</td>
+                  <td>{formatLarge(e.capexActual)}</td>
                   <td>
                     {isBeat && <span className={styles.badgeBeat}>BEAT</span>}
                     {isMiss && <span className={styles.badgeMiss}>MISS</span>}

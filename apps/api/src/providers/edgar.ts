@@ -10,6 +10,7 @@ export interface EdgarActual {
   date: string;
   epsActual: number | null;
   revenueActual: number | null;
+  capexActual: number | null;
 }
 
 interface TickerMap {
@@ -68,6 +69,11 @@ const REVENUE_CONCEPTS = [
   'Revenues',
   'SalesRevenueNet',
 ];
+const CAPEX_CONCEPTS = [
+  'PaymentsToAcquirePropertyPlantAndEquipment',
+  'PaymentsToAcquirePropertyPlantAndEquipmentAndIntangibleAssets',
+  'PaymentsToAcquireProductiveAssets',
+];
 
 interface FactRow {
   start: string;
@@ -101,26 +107,61 @@ function collectConcept(
 
 const QUARTER_MS = 120 * 24 * 60 * 60 * 1000;
 
-function dedupeByPeriod(rows: FactRow[]): FactRow[] {
+interface PeriodValues {
+  standalone: FactRow | null;
+  cumulative: FactRow | null;
+}
+
+function rowDuration(row: FactRow): number {
+  return new Date(row.end).getTime() - new Date(row.start).getTime();
+}
+
+function buildPeriodValues(rows: FactRow[]): Map<string, PeriodValues> {
+  const byEnd = new Map<string, PeriodValues>();
+  for (const row of rows) {
+    const cur = byEnd.get(row.end) ?? { standalone: null, cumulative: null };
+    if (!cur.standalone || rowDuration(row) < rowDuration(cur.standalone)) cur.standalone = row;
+    if (!cur.cumulative || rowDuration(row) > rowDuration(cur.cumulative)) cur.cumulative = row;
+    byEnd.set(row.end, cur);
+  }
+  return byEnd;
+}
+
+function deriveStandaloneFromCumulative(rows: FactRow[]): Map<string, number> {
   const best = new Map<string, FactRow>();
   for (const row of rows) {
-    const key = `${row.fy}-${row.fp}`;
-    const duration = new Date(row.end).getTime() - new Date(row.start).getTime();
-    const existing = best.get(key);
-    if (!existing) {
-      best.set(key, row);
-      continue;
-    }
-    const existingDuration = new Date(existing.end).getTime() - new Date(existing.start).getTime();
-    if (duration < existingDuration) {
-      best.set(key, row);
-    } else if (duration === existingDuration && row.filed > existing.filed) {
-      best.set(key, row);
+    const cur = best.get(row.end);
+    if (!cur || rowDuration(row) > rowDuration(cur)) best.set(row.end, row);
+  }
+  const byYear = new Map<string, FactRow[]>();
+  for (const row of best.values()) {
+    const list = byYear.get(row.start) ?? [];
+    list.push(row);
+    byYear.set(row.start, list);
+  }
+  const result = new Map<string, number>();
+  for (const list of byYear.values()) {
+    const sorted = list.sort((a, b) => a.end.localeCompare(b.end));
+    for (let i = 0; i < sorted.length; i++) {
+      const prev = sorted[i - 1];
+      result.set(sorted[i].end, prev ? Math.abs(sorted[i].val - prev.val) : Math.abs(sorted[i].val));
     }
   }
-  return Array.from(best.values())
-    .filter((r) => new Date(r.end).getTime() - new Date(r.start).getTime() < QUARTER_MS)
-    .sort((a, b) => b.fy - a.fy || b.fp.localeCompare(a.fp));
+  return result;
+}
+
+function finalQuarterlyValues(rows: FactRow[]): Map<string, number> {
+  const vals = buildPeriodValues(rows);
+  const result = new Map<string, number>();
+  for (const [end, v] of vals) {
+    if (v.standalone && rowDuration(v.standalone) < QUARTER_MS) {
+      result.set(end, v.standalone.val);
+    }
+  }
+  for (const [end, v] of deriveStandaloneFromCumulative(rows)) {
+    if (!result.has(end)) result.set(end, v);
+  }
+  return result;
 }
 
 export async function getEdgarActuals(symbol: string): Promise<EdgarActual[] | null> {
@@ -130,24 +171,32 @@ export async function getEdgarActuals(symbol: string): Promise<EdgarActual[] | n
   const facts = await fetchFacts(resolved.cik);
   if (!facts) return null;
 
-  const quarterly = ['Q1', 'Q2', 'Q3', 'Q4'];
-  const epsRows = dedupeByPeriod(collectConcept(facts.facts['us-gaap'], EPS_CONCEPTS, quarterly));
-  const revenueRows = dedupeByPeriod(collectConcept(facts.facts['us-gaap'], REVENUE_CONCEPTS, quarterly));
+  const allFps = ['Q1', 'Q2', 'Q3', 'Q4', 'FY'];
+  const epsRows = collectConcept(facts.facts['us-gaap'], EPS_CONCEPTS, allFps);
+  const revenueRows = collectConcept(facts.facts['us-gaap'], REVENUE_CONCEPTS, allFps);
+  const capexRows = collectConcept(facts.facts['us-gaap'], CAPEX_CONCEPTS, allFps);
 
-  const revenueByPeriod = new Map(revenueRows.map((r) => [`${r.fy}-${r.fp}`, r.val]));
+  const epsByEnd = finalQuarterlyValues(epsRows);
+  const revenueByEnd = finalQuarterlyValues(revenueRows);
+  const capexByEnd = finalQuarterlyValues(capexRows);
 
-  const actuals: EdgarActual[] = epsRows
-    .filter((r) => r.form === '10-Q' || r.form === '8-K')
-    .map((r) => {
-      const qNum = Number(r.fp.replace('Q', ''));
+  const actuals: EdgarActual[] = Array.from(epsByEnd.entries())
+    .map(([end, epsActual]) => {
+      const labelRow = epsRows
+        .filter((r) => r.end === end)
+        .sort((a, b) => Number(a.fp === 'FY') - Number(b.fp === 'FY'))[0];
+      const quarter = labelRow?.fp === 'FY' ? 4 : labelRow ? Number(labelRow.fp.replace('Q', '')) : 0;
       return {
-        quarter: qNum,
-        year: r.fy,
-        date: r.end,
-        epsActual: r.val,
-        revenueActual: revenueByPeriod.get(`${r.fy}-${r.fp}`) ?? null,
+        quarter,
+        year: labelRow?.fy ?? 0,
+        date: end,
+        epsActual,
+        revenueActual: revenueByEnd.get(end) ?? null,
+        capexActual: capexByEnd.get(end) ?? null,
       };
-    });
+    })
+    .filter((a) => a.quarter > 0)
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   if (actuals.length === 0) return null;
   return actuals;

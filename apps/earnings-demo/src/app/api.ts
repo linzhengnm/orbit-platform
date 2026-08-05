@@ -25,6 +25,7 @@ export interface EarningsEvent {
   epsEstimate: number | null;
   revenueActual: number | null;
   revenueEstimate: number | null;
+  capexActual: number | null;
   epsSurprisePct: number | null;
   revenueSurprisePct: number | null;
 }
@@ -194,6 +195,7 @@ async function fetchEarnings(symbol: string): Promise<EarningsEvent[]> {
       epsEstimate: e.estimate,
       revenueActual: null,
       revenueEstimate: null,
+      capexActual: null,
       epsSurprisePct: e.surprisePercent,
       revenueSurprisePct: null,
     }));
@@ -279,6 +281,7 @@ export interface EdgarActual {
   date: string;
   epsActual: number | null;
   revenueActual: number | null;
+  capexActual: number | null;
 }
 
 const EDGAR_API_URL = import.meta.env.VITE_API_URL ?? '';
@@ -310,6 +313,7 @@ function mergeEdgarActuals(earnings: EarningsEvent[], actuals: EdgarActual[] | n
       date: match.date || e.date,
       epsActual: e.epsActual ?? match.epsActual,
       revenueActual: e.revenueActual ?? match.revenueActual,
+      capexActual: e.capexActual ?? match.capexActual,
     };
   });
 }
@@ -383,6 +387,7 @@ export async function fetchCompanyEarnings(symbol: string): Promise<CompanyDetai
           epsEstimate: null,
           revenueActual: a.revenueActual,
           revenueEstimate: null,
+          capexActual: a.capexActual,
           epsSurprisePct: null,
           revenueSurprisePct: null,
         })),
@@ -507,6 +512,7 @@ function seedToEarnings(s: SeedEntry): EarningsEvent[] {
       symbol: s.symbol, quarter: qNum, year, date: q.label,
       epsActual: q.epsActual, epsEstimate: q.epsEstimate,
       revenueActual: q.revenueActual, revenueEstimate: null,
+      capexActual: null,
       epsSurprisePct, revenueSurprisePct: null,
     };
   });
